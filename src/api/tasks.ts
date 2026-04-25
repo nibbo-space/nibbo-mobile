@@ -1,0 +1,43 @@
+import { z } from "zod";
+import { apiRequest } from "./client";
+import { taskListSchema, taskSchema, type TaskItem } from "./contracts";
+
+export type TaskScope = "all" | "mine" | "today" | "overdue";
+
+export async function fetchTasks(scope: TaskScope) {
+  const response = await apiRequest(`/api/mobile/v1/tasks?scope=${scope}`);
+  if (!response.ok) throw new Error("Failed to load tasks");
+  const data = taskListSchema.parse(await response.json());
+  return data.items;
+}
+
+const createPayloadSchema = z.object({
+  title: z.string().min(1),
+  description: z.string().nullable().optional(),
+});
+
+export async function createTask(payload: z.infer<typeof createPayloadSchema>) {
+  const input = createPayloadSchema.parse(payload);
+  const response = await apiRequest("/api/mobile/v1/tasks", {
+    method: "POST",
+    body: input,
+  });
+  if (!response.ok) throw new Error("Failed to create task");
+  return taskSchema.parse(await response.json());
+}
+
+export async function updateTask(taskId: string, patch: Partial<TaskItem>) {
+  const response = await apiRequest(`/api/mobile/v1/tasks/${taskId}`, {
+    method: "PATCH",
+    body: patch,
+  });
+  if (!response.ok) throw new Error("Failed to update task");
+  return taskSchema.parse(await response.json());
+}
+
+export async function removeTask(taskId: string) {
+  const response = await apiRequest(`/api/mobile/v1/tasks/${taskId}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) throw new Error("Failed to delete task");
+}
