@@ -4,8 +4,13 @@ import { taskListSchema, taskSchema, type TaskItem } from "./contracts";
 
 export type TaskScope = "all" | "mine" | "today" | "overdue";
 
-export async function fetchTasks(scope: TaskScope) {
-  const response = await apiRequest(`/api/mobile/v1/tasks?scope=${scope}`);
+export async function fetchTasks(
+  scope: TaskScope,
+  options?: { includeCompleted?: boolean },
+) {
+  const params = new URLSearchParams({ scope });
+  if (options?.includeCompleted) params.set("includeCompleted", "1");
+  const response = await apiRequest(`/api/mobile/v1/tasks?${params.toString()}`);
   if (!response.ok) throw new Error("Failed to load tasks");
   const data = taskListSchema.parse(await response.json());
   return data.items;
@@ -14,6 +19,11 @@ export async function fetchTasks(scope: TaskScope) {
 const createPayloadSchema = z.object({
   title: z.string().min(1),
   description: z.string().nullable().optional(),
+  columnId: z.string().nullable().optional(),
+  priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).optional(),
+  dueDate: z.string().datetime().nullable().optional(),
+  isPrivate: z.boolean().optional(),
+  labels: z.array(z.string()).optional(),
 });
 
 export async function createTask(payload: z.infer<typeof createPayloadSchema>) {

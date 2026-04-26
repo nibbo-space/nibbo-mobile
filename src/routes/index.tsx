@@ -1,9 +1,13 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { DashboardScreen } from "../screens/dashboard-screen";
 import { getSessionSnapshot } from "../stores/session-store";
 
 export const Route = createFileRoute("/")({
   beforeLoad: () => {
     const state = getSessionSnapshot();
-    throw redirect({ to: state.isAuthenticated ? "/tasks" : "/login" });
+    if (!state.isAuthenticated) {
+      throw redirect({ to: "/login" });
+    }
   },
+  component: DashboardScreen,
 });

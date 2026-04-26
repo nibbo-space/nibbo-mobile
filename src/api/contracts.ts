@@ -44,7 +44,55 @@ export const taskListSchema = z.object({
   items: z.array(taskSchema),
 });
 
+export const profileSchema = z.object({
+  id: z.string(),
+  name: z.string().nullable(),
+  email: z.string().email().nullable().optional(),
+  image: z.string().nullable(),
+  color: z.string().nullable().optional(),
+  emoji: z.string().nullable().optional(),
+  familyId: z.string().nullable(),
+});
+
+export const notificationItemSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  boardId: z.string().optional(),
+  boardName: z.string(),
+  boardEmoji: z.string().optional().nullable(),
+  columnName: z.string(),
+  creatorName: z.string().nullable().optional(),
+  creatorEmoji: z.string().nullable().optional(),
+  updatedAt: z.string().optional(),
+});
+
+export const notificationsResponseSchema = z.object({
+  items: z.array(notificationItemSchema),
+  count: z.number().int().nonnegative(),
+});
+
+export const shoppingItemSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  checked: z.boolean().optional().default(false),
+});
+
+export const shoppingListSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  emoji: z.string().nullable().optional(),
+  isPrivate: z.boolean().optional().default(false),
+  items: z.array(shoppingItemSchema).optional().default([]),
+});
+
+export const shoppingListsSchema = z.array(shoppingListSchema);
+
 export type MobileUser = z.infer<typeof mobileUserSchema>;
 export type TokenPair = z.infer<typeof tokenPairSchema>;
 export type GoogleAuthResponse = z.infer<typeof googleAuthResponseSchema>;
 export type TaskItem = z.infer<typeof taskSchema>;
+export type Profile = z.infer<typeof profileSchema>;
+export type NotificationItem = z.infer<typeof notificationItemSchema>;
+export type NotificationsResponse = z.infer<typeof notificationsResponseSchema>;
+export type ShoppingItem = z.infer<typeof shoppingItemSchema>;
+export type ShoppingList = z.infer<typeof shoppingListSchema>;

@@ -5,7 +5,7 @@ import { getSessionSnapshot } from "../stores/session-store";
 export const Route = createFileRoute("/login")({
   beforeLoad: () => {
     if (getSessionSnapshot().isAuthenticated) {
-      throw redirect({ to: "/tasks" });
+      throw redirect({ to: "/" });
     }
   },
   component: LoginScreen,

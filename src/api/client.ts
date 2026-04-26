@@ -37,7 +37,9 @@ async function getRefreshed() {
 
 export async function apiRequest(path: string, options: RequestOptions = {}) {
   const headers = new Headers(options.headers);
-  headers.set("Content-Type", "application/json");
+  if (options.body !== undefined) {
+    headers.set("Content-Type", "application/json");
+  }
   if (options.auth !== false) {
     const token = await getAccessToken();
     if (token) headers.set("Authorization", `Bearer ${token}`);
@@ -53,7 +55,9 @@ export async function apiRequest(path: string, options: RequestOptions = {}) {
   if (!refreshed) return response;
 
   const retryHeaders = new Headers(options.headers);
-  retryHeaders.set("Content-Type", "application/json");
+  if (options.body !== undefined) {
+    retryHeaders.set("Content-Type", "application/json");
+  }
   const nextToken = await getAccessToken();
   if (nextToken) retryHeaders.set("Authorization", `Bearer ${nextToken}`);
 
