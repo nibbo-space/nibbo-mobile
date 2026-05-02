@@ -1,7 +1,8 @@
 import { Link, useRouterState } from "@tanstack/react-router";
+import { i18n } from "../lib/i18n";
 import { Icon } from "./icon";
 
-type TabName = "home" | "list" | "cart" | "user";
+type TabName = "home" | "list" | "cart" | "note" | "user";
 
 type Tab = {
   to: string;
@@ -9,15 +10,15 @@ type Tab = {
   label: string;
 };
 
-const tabs: Tab[] = [
-  { to: "/", icon: "home", label: "Головна" },
-  { to: "/tasks", icon: "list", label: "Задачі" },
-  { to: "/shopping", icon: "cart", label: "Покупки" },
-  { to: "/profile", icon: "user", label: "Профіль" },
-];
-
 export function TabBar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const tabs: Tab[] = [
+    { to: "/", icon: "home", label: i18n.tabs.home },
+    { to: "/tasks", icon: "list", label: i18n.tabs.tasks },
+    { to: "/shopping", icon: "cart", label: i18n.tabs.shopping },
+    { to: "/notes", icon: "note", label: i18n.tabs.notes },
+    { to: "/profile", icon: "user", label: i18n.tabs.profile },
+  ];
 
   return (
     <nav className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-3 pb-3">

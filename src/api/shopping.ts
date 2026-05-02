@@ -36,6 +36,14 @@ const updateShoppingItemSchema = z.object({
   isPrivate: z.boolean().optional(),
 });
 
+export async function createShoppingList(name: string, emoji?: string): Promise<void> {
+  const response = await apiRequest("/api/mobile/v1/shopping", {
+    method: "POST",
+    body: { type: "list", name, emoji: emoji ?? "🛒" },
+  });
+  if (!response.ok) throw new Error("Failed to create shopping list");
+}
+
 export async function updateShoppingItem(
   itemId: string,
   patch: z.infer<typeof updateShoppingItemSchema>,

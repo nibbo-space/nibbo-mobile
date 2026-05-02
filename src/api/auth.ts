@@ -19,3 +19,29 @@ export async function signInWithGoogle() {
   }
   return googleAuthResponseSchema.parse(await response.json());
 }
+
+export async function signInWithEmail(email: string, password: string) {
+  const response = await apiRequest("/api/mobile/v1/auth/email/login", {
+    method: "POST",
+    auth: false,
+    body: { email, password },
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || "Email auth failed");
+  }
+  return googleAuthResponseSchema.parse(await response.json());
+}
+
+export async function registerWithEmail(email: string, password: string, name?: string) {
+  const response = await apiRequest("/api/mobile/v1/auth/email/register", {
+    method: "POST",
+    auth: false,
+    body: { email, password, ...(name ? { name } : {}) },
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || "Registration failed");
+  }
+  return googleAuthResponseSchema.parse(await response.json());
+}

@@ -7,6 +7,7 @@ import {
 } from "../api/notifications";
 import { Icon } from "../components/icon";
 import { Screen } from "../components/screen";
+import { getCalendarLocale, i18n } from "../lib/i18n";
 
 export function NotificationsScreen() {
   const navigate = useNavigate();
@@ -37,35 +38,35 @@ export function NotificationsScreen() {
         <button
           onClick={() => navigate({ to: "/" })}
           className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-text/70 shadow-cozy"
-          aria-label="Назад"
+          aria-label={i18n.notifications.backAria}
         >
           <Icon name="back" size={18} />
         </button>
         <div className="text-center">
-          <h1 className="text-base font-bold tracking-tight text-ink">Сповіщення</h1>
-          <p className="text-[11px] text-muted">Те, що варте уваги</p>
+          <h1 className="text-base font-bold tracking-tight text-ink">{i18n.notifications.title}</h1>
+          <p className="text-[11px] text-muted">{i18n.notifications.subtitle}</p>
         </div>
         <button
           onClick={() => markAllMutation.mutate()}
           className="h-11 rounded-2xl bg-cream-50 px-3 text-[11px] font-semibold text-ink"
           disabled={markAllMutation.isPending || items.length === 0}
         >
-          Прочитано
+          {i18n.notifications.markRead}
         </button>
       </header>
 
       <div className="mt-5 space-y-3">
         {notificationsQuery.isLoading ? (
-          <div className="rounded-3xl bg-white p-4 text-sm text-muted shadow-cozy">Завантаження…</div>
+          <div className="rounded-3xl bg-white p-4 text-sm text-muted shadow-cozy">{i18n.common.loading}</div>
         ) : null}
         {notificationsQuery.isError ? (
           <div className="rounded-3xl bg-white p-4 text-sm text-rose-500 shadow-cozy">
-            Не вдалося завантажити сповіщення
+            {i18n.notifications.loadError}
           </div>
         ) : null}
         {!notificationsQuery.isLoading && !notificationsQuery.isError && items.length === 0 ? (
           <div className="rounded-3xl bg-white p-4 text-sm text-muted shadow-cozy">
-            Наразі немає нових сповіщень
+            {i18n.notifications.empty}
           </div>
         ) : null}
         {items.map((item) => (
@@ -102,5 +103,10 @@ function formatWhen(value?: string) {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleDateString();
+  return date.toLocaleDateString(getCalendarLocale(), {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }

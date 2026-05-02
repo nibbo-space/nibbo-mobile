@@ -4,8 +4,9 @@ import { Capacitor } from "@capacitor/core";
 import { PushNotifications } from "@capacitor/push-notifications";
 import { useEffect, useState } from "react";
 import { TabBar } from "../components/tab-bar";
+import { i18n } from "../lib/i18n";
 
-const HIDDEN_PATHS = ["/login"];
+const HIDDEN_PATHS = ["/login", "/onboarding"];
 
 function RootLayout() {
   const navigate = useNavigate();
@@ -23,8 +24,8 @@ function RootLayout() {
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       queryClient.invalidateQueries({ queryKey: ["shopping-lists"] });
-      const title = notification.title?.trim() || "Нове сповіщення";
-      const body = notification.body?.trim() || "Перевірте останні оновлення";
+      const title = notification.title?.trim() || i18n.notifications.pushDefaultTitle;
+      const body = notification.body?.trim() || i18n.notifications.pushDefaultBody;
       setPushBanner({ title, body });
       if (timer) window.clearTimeout(timer);
       timer = window.setTimeout(() => setPushBanner(null), 4000);

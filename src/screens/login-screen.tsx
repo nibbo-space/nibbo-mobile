@@ -1,7 +1,12 @@
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { signInWithGoogle } from "../api/auth";
+import { useState } from "react";
+import {
+  registerWithEmail,
+  signInWithEmail,
+  signInWithGoogle,
+} from "../api/auth";
 import type { MobileUser } from "../api/contracts";
 import { Button } from "../components/button";
 import { Logo } from "../components/logo";
@@ -11,8 +16,17 @@ import { setSession } from "../stores/session-store";
 
 const previewSeed = `nibbo-preview-${crypto.randomUUID()}`;
 
+type AuthTab = "google" | "email";
+type EmailMode = "login" | "register";
+
 export function LoginScreen() {
   const navigate = useNavigate();
+  const [tab, setTab] = useState<AuthTab>("google");
+  const [emailMode, setEmailMode] = useState<EmailMode>("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+
   const signInDev = async () => {
     const mockUser: MobileUser = {
       id: "dev-user",
@@ -25,19 +39,41 @@ export function LoginScreen() {
     await setSession(mockUser, "dev-access-token", "dev-refresh-token");
     await navigate({ to: "/" });
   };
-  const loginMutation = useMutation({
+
+  const onSuccess = async (data: {
+    user: MobileUser | null;
+    accessToken: string;
+    refreshToken: string;
+  }) => {
+    if (!data.user) throw new Error("User not found");
+    await setSession(data.user, data.accessToken, data.refreshToken);
+    await navigate({ to: "/" });
+  };
+
+  const googleMutation = useMutation({
     mutationFn: signInWithGoogle,
-    onSuccess: async (data) => {
-      if (!data.user) throw new Error("User not found");
-      await setSession(data.user, data.accessToken, data.refreshToken);
-      await navigate({ to: "/" });
-    },
+    onSuccess,
   });
+
+  const emailLoginMutation = useMutation({
+    mutationFn: () => signInWithEmail(email.trim(), password),
+    onSuccess,
+  });
+
+  const emailRegisterMutation = useMutation({
+    mutationFn: () =>
+      registerWithEmail(email.trim(), password, name.trim() || undefined),
+    onSuccess,
+  });
+
+  const activeEmailMutation =
+    emailMode === "login" ? emailLoginMutation : emailRegisterMutation;
+  const anyError = googleMutation.error ?? activeEmailMutation.error;
 
   return (
     <main className="mx-auto flex h-screen w-full max-w-md flex-col overflow-hidden bg-[#fcfaf3]">
       <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-[#fcfaf3]">
-        <section className="relative flex-1 overflow-hidden bg-[linear-gradient(180deg,#c8bdf5_0%,#c3b8f2_55%,#beb4ee_100%)] px-6 pb-0 pt-5">
+        <section className="relative flex flex-col flex-1 overflow-hidden bg-[linear-gradient(180deg,#c8bdf5_0%,#c3b8f2_55%,#beb4ee_100%)] px-6 pb-0 pt-5">
           <div className="absolute -left-10 top-14 h-52 w-52 rounded-full bg-white/30 blur-3xl" />
           <div className="absolute -right-10 top-10 h-56 w-56 rounded-full bg-rose-200/40 blur-3xl" />
           <div className="absolute left-1/2 top-[46%] h-64 w-64 -translate-x-1/2 rounded-full bg-fuchsia-200/30 blur-3xl" />
@@ -82,20 +118,25 @@ export function LoginScreen() {
             </span>
           </div>
 
-          <div className="relative flex flex-1 items-center justify-center">
-            <motion.div
-              initial={{ opacity: 0, y: 5, scale: 0.90 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ duration: 0.45 }}
-              className="-translate-y-12"
-            >
+          <div className="relative flex-1">
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 -mt-12">
               <motion.div
-                animate={{ y: [0, -1.2, 0] }}
-                transition={{ duration: 17, repeat: Infinity, ease: "easeInOut" }}
+                initial={{ opacity: 0, y: 5, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0.45 }}
               >
-                <Mascot seed={previewSeed} size={600} mood="happy" />
+                <motion.div
+                  animate={{ y: [0, -1.2, 0] }}
+                  transition={{
+                    duration: 17,
+                    repeat: Infinity,
+                    ease: "easeInOut",
+                  }}
+                >
+                  <Mascot seed={previewSeed} size={600} mood="happy" />
+                </motion.div>
               </motion.div>
-            </motion.div>
+            </div>
           </div>
 
           <svg
@@ -105,10 +146,22 @@ export function LoginScreen() {
             aria-hidden
           >
             <defs>
-              <filter id="curve-shadow" x="-10%" y="-40%" width="120%" height="220%">
+              <filter
+                id="curve-shadow"
+                x="-10%"
+                y="-40%"
+                width="120%"
+                height="220%"
+              >
                 <feGaussianBlur stdDeviation="2.8" />
               </filter>
-              <filter id="curve-highlight" x="-10%" y="-40%" width="120%" height="220%">
+              <filter
+                id="curve-highlight"
+                x="-10%"
+                y="-40%"
+                width="120%"
+                height="220%"
+              >
                 <feGaussianBlur stdDeviation="1.2" />
               </filter>
             </defs>
@@ -173,39 +226,153 @@ export function LoginScreen() {
             >
               {i18n.login.title}
             </h1>
-            <p className="mt-5 text-sm leading-relaxed text-muted">
-              {i18n.login.subtitle}
-            </p>
 
-            <div className="mt-4">
-              <Button
-                variant="dark"
-                fullWidth
-                onClick={() => loginMutation.mutate()}
-                disabled={loginMutation.isPending}
-                className="h-14 rounded-3xl border border-rose-700 bg-rose-600 text-base text-white shadow-[0_10px_18px_rgba(225,29,72,0.28)] hover:bg-rose-700"
+            {/* Tab switcher */}
+            <div className="mt-4 flex gap-1 rounded-2xl bg-cream-100 p-1">
+              <button
+                type="button"
+                onClick={() => setTab("google")}
+                className={`flex-1 rounded-xl py-2 text-sm font-semibold transition-colors ${
+                  tab === "google"
+                    ? "bg-white text-ink shadow-sm"
+                    : "text-muted"
+                }`}
               >
-                {loginMutation.isPending
-                  ? i18n.login.signingIn
-                  : i18n.login.continueWithGoogle}
-              </Button>
+                {i18n.login.tabGoogle}
+              </button>
+              <button
+                type="button"
+                onClick={() => setTab("email")}
+                className={`flex-1 rounded-xl py-2 text-sm font-semibold transition-colors ${
+                  tab === "email" ? "bg-white text-ink shadow-sm" : "text-muted"
+                }`}
+              >
+                {i18n.login.tabEmail}
+              </button>
             </div>
+
+            {tab === "google" ? (
+              <div className="mt-4">
+                <p className="mb-4 text-sm leading-relaxed text-muted">
+                  {i18n.login.subtitle}
+                </p>
+                <Button
+                  variant="dark"
+                  fullWidth
+                  onClick={() => googleMutation.mutate()}
+                  disabled={googleMutation.isPending}
+                  className="h-14 rounded-3xl border border-rose-700 bg-rose-600 text-base text-white shadow-[0_10px_18px_rgba(225,29,72,0.28)] hover:bg-rose-700"
+                >
+                  {googleMutation.isPending
+                    ? i18n.login.signingIn
+                    : i18n.login.continueWithGoogle}
+                </Button>
+              </div>
+            ) : (
+              <div className="mt-4 space-y-3">
+                {emailMode === "register" ? (
+                  <div>
+                    <label className="block text-[11px] font-semibold uppercase tracking-wide text-muted mb-1">
+                      {i18n.login.nameLabel}
+                    </label>
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder={i18n.login.namePlaceholder}
+                      autoComplete="name"
+                      className="h-12 w-full rounded-2xl border border-border bg-cream-50 px-4 text-sm text-ink outline-none focus:border-rose-300 focus:bg-white focus:ring-4 focus:ring-rose-100"
+                    />
+                  </div>
+                ) : null}
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wide text-muted mb-1">
+                    {i18n.login.emailLabel}
+                  </label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder={i18n.login.emailPlaceholder}
+                    autoComplete="email"
+                    inputMode="email"
+                    className="h-12 w-full rounded-2xl border border-border bg-cream-50 px-4 text-sm text-ink outline-none focus:border-rose-300 focus:bg-white focus:ring-4 focus:ring-rose-100"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-semibold uppercase tracking-wide text-muted mb-1">
+                    {i18n.login.passwordLabel}
+                  </label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder={i18n.login.passwordPlaceholder}
+                    autoComplete={
+                      emailMode === "login"
+                        ? "current-password"
+                        : "new-password"
+                    }
+                    className="h-12 w-full rounded-2xl border border-border bg-cream-50 px-4 text-sm text-ink outline-none focus:border-rose-300 focus:bg-white focus:ring-4 focus:ring-rose-100"
+                  />
+                </div>
+                <Button
+                  variant="dark"
+                  fullWidth
+                  onClick={() =>
+                    emailMode === "login"
+                      ? emailLoginMutation.mutate()
+                      : emailRegisterMutation.mutate()
+                  }
+                  disabled={
+                    activeEmailMutation.isPending ||
+                    !email.trim() ||
+                    password.length < 8
+                  }
+                  className="h-14 rounded-3xl border border-rose-700 bg-rose-600 text-base text-white shadow-[0_10px_18px_rgba(225,29,72,0.28)] hover:bg-rose-700"
+                >
+                  {activeEmailMutation.isPending
+                    ? emailMode === "login"
+                      ? i18n.login.signingIn
+                      : i18n.login.registering
+                    : emailMode === "login"
+                      ? i18n.login.signIn
+                      : i18n.login.register}
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmailMode(emailMode === "login" ? "register" : "login");
+                    emailLoginMutation.reset();
+                    emailRegisterMutation.reset();
+                  }}
+                  className="w-full text-center text-xs font-medium text-muted underline-offset-2 hover:text-ink hover:underline"
+                >
+                  {emailMode === "login"
+                    ? i18n.login.switchToRegister
+                    : i18n.login.switchToLogin}
+                </button>
+              </div>
+            )}
+
             {import.meta.env.DEV ? (
               <button
                 onClick={signInDev}
                 className="mt-3 w-full text-center text-xs font-medium text-ink/55 underline-offset-2 hover:text-ink/80 hover:underline"
               >
-                DEV: skip login
+                {i18n.login.devSkipLogin}
               </button>
             ) : null}
 
-            {loginMutation.isError ? (
+            {anyError ? (
               <p className="mt-3 text-center text-sm text-rose-500">
-                {localizeApiError((loginMutation.error as Error).message)}
+                {localizeApiError((anyError as Error).message)}
               </p>
             ) : null}
 
-            <p className="mt-4 text-center text-xs text-muted">{i18n.login.terms}</p>
+            <p className="mt-4 text-center text-xs text-muted">
+              {i18n.login.terms}
+            </p>
           </div>
         </section>
       </div>

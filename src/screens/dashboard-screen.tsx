@@ -2,11 +2,11 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { motion, useScroll } from "framer-motion";
 import { useRef } from "react";
+import { fetchFamilyMembers, fetchProfile } from "../api/profile";
 import { Avatar } from "../components/avatar";
 import { Icon } from "../components/icon";
 import { Mascot } from "../components/mascot";
-import { fetchFamilyMembers, fetchProfile } from "../api/profile";
-import { getSessionSnapshot } from "../stores/session-store";
+import { useSession } from "../hooks/use-session";
 import { i18n } from "../lib/i18n";
 
 const HERO_HEIGHT = 380;
@@ -14,7 +14,7 @@ const SHEET_OVERLAP = 64;
 
 export function DashboardScreen() {
   const navigate = useNavigate();
-  const session = getSessionSnapshot();
+  const session = useSession();
   const profileQuery = useQuery({
     queryKey: ["profile"],
     queryFn: fetchProfile,
@@ -23,7 +23,8 @@ export function DashboardScreen() {
     queryKey: ["family-members"],
     queryFn: fetchFamilyMembers,
   });
-  const userName = session.user?.name?.split(" ")[0] ?? i18n.tasks.defaultUserName;
+  const userName =
+    session.user?.name?.split(" ")[0] ?? i18n.tasks.defaultUserName;
   const avatarUrl = profileQuery.data?.image ?? session.user?.image ?? null;
   const mascotSeed = session.user?.familyId ?? session.user?.id ?? "nibbo";
 
@@ -60,7 +61,12 @@ export function DashboardScreen() {
           className="rounded-full bg-gradient-to-br from-rose-200 via-lavender-200 to-sky-200 p-0.5 shadow-[0_8px_18px_rgba(236,72,153,0.22)] transition-transform active:scale-95"
           aria-label="Open profile"
         >
-          <Avatar src={avatarUrl} name={userName} size={42} className="rounded-full ring-2 ring-white/90" />
+          <Avatar
+            src={avatarUrl}
+            name={userName}
+            size={42}
+            className="rounded-full ring-2 ring-white/90"
+          />
         </button>
         <button
           onClick={() => navigate({ to: "/notifications" })}
@@ -92,14 +98,18 @@ export function DashboardScreen() {
                 </p>
               </div>
               <div className="flex h-11 min-w-11 items-center justify-center rounded-2xl bg-white text-base shadow-cozy">
-                  ✨
+                ✨
               </div>
             </div>
           </div>
 
           <section className="mt-5 rounded-3xl bg-gradient-to-br from-lavender-100 via-white to-rose-50 p-4 shadow-cozy">
-            <h2 className="text-sm font-bold tracking-tight text-ink">{i18n.dashboard.hubTitle}</h2>
-            <p className="mt-1 text-xs text-warm-500">{i18n.dashboard.hubSubtitle}</p>
+            <h2 className="text-sm font-bold tracking-tight text-ink">
+              {i18n.dashboard.hubTitle}
+            </h2>
+            <p className="mt-1 text-xs text-warm-500">
+              {i18n.dashboard.hubSubtitle}
+            </p>
             <div className="mt-4 grid grid-cols-2 gap-2.5">
               <HubAction
                 title={i18n.dashboard.openTasks}
@@ -114,16 +124,28 @@ export function DashboardScreen() {
                 onClick={() => navigate({ to: "/shopping" })}
               />
               <HubAction
+                title={i18n.notes.title}
+                emoji="📓"
+                tone="lavender"
+                onClick={() => navigate({ to: "/notes" })}
+              />
+              <HubAction
+                title={i18n.calendar.title}
+                emoji="📅"
+                tone="sky"
+                onClick={() => navigate({ to: "/calendar" })}
+              />
+              <HubAction
+                title={i18n.budget.title}
+                emoji="💰"
+                tone="mint"
+                onClick={() => navigate({ to: "/budget" })}
+              />
+              <HubAction
                 title={i18n.dashboard.openNotifications}
                 emoji="🔔"
                 tone="sky"
                 onClick={() => navigate({ to: "/notifications" })}
-              />
-              <HubAction
-                title={i18n.dashboard.openProfile}
-                emoji="👤"
-                tone="lavender"
-                onClick={() => navigate({ to: "/profile" })}
               />
             </div>
           </section>
@@ -131,14 +153,16 @@ export function DashboardScreen() {
           <section className="mt-4 overflow-hidden rounded-3xl border border-sky-100 bg-white p-4 shadow-cozy">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-semibold text-sky-500">Родина</p>
-                <p className="mt-1 text-[11px] text-warm-500">Хто зараз у вашій сімейній хмарці</p>
+                <p className="text-xs font-semibold text-sky-500">{i18n.dashboard.familyRibbonTitle}</p>
+                <p className="mt-1 text-[11px] text-warm-500">
+                  {i18n.dashboard.familyRibbonSubtitle}
+                </p>
               </div>
               <button
                 onClick={() => navigate({ to: "/profile" })}
                 className="rounded-xl bg-sky-50 px-3 py-1.5 text-[11px] font-semibold text-sky-500"
               >
-                Профіль
+                {i18n.dashboard.profileLink}
               </button>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -148,21 +172,30 @@ export function DashboardScreen() {
                   onClick={() => navigate({ to: "/profile" })}
                   className="flex items-center gap-2 rounded-full bg-cream-50 px-2.5 py-2 shadow-cozy transition-transform active:scale-[0.98]"
                 >
-                  <Avatar src={member.image ?? null} name={member.name} size={28} className="rounded-full" />
+                  <Avatar
+                    src={member.image ?? null}
+                    name={member.name}
+                    size={28}
+                    className="rounded-full"
+                  />
                   <span className="max-w-[108px] truncate text-xs font-medium text-ink">
-                    {member.name || "Учасник"}
+                    {member.name || i18n.dashboard.memberFallback}
                   </span>
                 </button>
               ))}
               {familyMembersQuery.isLoading ? (
-                <div className="rounded-full bg-cream-50 px-3 py-2 text-xs text-muted">Завантаження…</div>
+                <div className="rounded-full bg-cream-50 px-3 py-2 text-xs text-muted">
+                  {i18n.dashboard.loadingMembers}
+                </div>
               ) : null}
-              {!familyMembersQuery.isLoading && (familyMembersQuery.data ?? []).length === 0 ? (
-                <div className="rounded-full bg-cream-50 px-3 py-2 text-xs text-muted">Поки що без учасників</div>
+              {!familyMembersQuery.isLoading &&
+              (familyMembersQuery.data ?? []).length === 0 ? (
+                <div className="rounded-full bg-cream-50 px-3 py-2 text-xs text-muted">
+                  {i18n.dashboard.noMembers}
+                </div>
               ) : null}
             </div>
           </section>
-
         </section>
       </div>
     </main>
@@ -229,7 +262,7 @@ function HubAction({
 }: {
   title: string;
   emoji: string;
-  tone: "rose" | "peach" | "sky" | "lavender";
+  tone: "rose" | "peach" | "sky" | "lavender" | "mint";
   onClick: () => void;
 }) {
   const toneClass = {
@@ -237,13 +270,18 @@ function HubAction({
     peach: "bg-peach-100 text-peach-500",
     sky: "bg-sky-100 text-sky-400",
     lavender: "bg-lavender-100 text-lavender-500",
+    mint: "bg-emerald-100 text-emerald-600",
   }[tone];
   return (
     <button
       onClick={onClick}
       className="flex items-center gap-2 rounded-2xl bg-white px-3 py-3 text-left shadow-cozy transition-transform active:scale-[0.98]"
     >
-      <span className={`flex h-8 w-8 items-center justify-center rounded-xl ${toneClass}`}>{emoji}</span>
+      <span
+        className={`flex h-8 w-8 items-center justify-center rounded-xl ${toneClass}`}
+      >
+        {emoji}
+      </span>
       <span className="text-xs font-semibold text-ink">{title}</span>
     </button>
   );

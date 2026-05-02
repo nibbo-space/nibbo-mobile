@@ -496,6 +496,13 @@ export function buildProceduralMascot(
   body.add(bellyGlow);
 
   root.add(body);
+  body.updateMatrixWorld(true);
+  const bounds = new THREE.Box3().setFromObject(body, true);
+  const bc = new THREE.Vector3();
+  if (!bounds.isEmpty()) {
+    bounds.getCenter(bc);
+    root.position.set(-bc.x, -bc.y, -bc.z);
+  }
 
   return {
     root,

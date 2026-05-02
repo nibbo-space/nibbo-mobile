@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
-import { createTask, fetchTasks, removeTask, updateTask, type TaskScope } from "../api/tasks";
+import { createBoard, createColumn, createTask, fetchBoards, fetchTasks, removeTask, updateTask, type TaskScope } from "../api/tasks";
 import type { TaskItem } from "../api/contracts";
 import { Button } from "../components/button";
 import { Icon } from "../components/icon";
@@ -13,17 +13,17 @@ import { Screen } from "../components/screen";
 import { TextField } from "../components/text-field";
 import { i18n } from "../lib/i18n";
 
-const scopeLabels: Record<TaskScope, string> = {
-  all: i18n.tasks.scopeAll,
-  mine: i18n.tasks.scopeMine,
-  today: i18n.tasks.scopeToday,
-  overdue: i18n.tasks.scopeOverdue,
-};
-
 const scopes: TaskScope[] = ["all", "mine", "today", "overdue"];
 
 export function TasksScreen() {
+  const scopeLabels: Record<TaskScope, string> = {
+    all: i18n.tasks.scopeAll,
+    mine: i18n.tasks.scopeMine,
+    today: i18n.tasks.scopeToday,
+    overdue: i18n.tasks.scopeOverdue,
+  };
   const [scope, setScope] = useState<TaskScope>("all");
+  const [filterBoardId, setFilterBoardId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<"LOW" | "MEDIUM" | "HIGH" | "URGENT">("MEDIUM");
@@ -32,6 +32,11 @@ export function TasksScreen() {
   const [selectedBoardId, setSelectedBoardId] = useState("");
   const [selectedColumnId, setSelectedColumnId] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
+  // board/column management sheet
+  const [manageOpen, setManageOpen] = useState(false);
+  const [newBoardName, setNewBoardName] = useState("");
+  const [newColumnBoardId, setNewColumnBoardId] = useState("");
+  const [newColumnName, setNewColumnName] = useState("");
   const queryClient = useQueryClient();
   const location = useLocation();
   const queryKey = useMemo(() => ["tasks", scope] as const, [scope]);
@@ -48,11 +53,10 @@ export function TasksScreen() {
     refetchInterval: 15000,
     refetchIntervalInBackground: true,
   });
-  const taskMetaQuery = useQuery({
-    queryKey: ["tasks", "meta"],
-    queryFn: () => fetchTasks("all", { includeCompleted: true }),
-    refetchInterval: 30000,
-    refetchIntervalInBackground: true,
+  const boardsQuery = useQuery({
+    queryKey: ["tasks", "boards"],
+    queryFn: fetchBoards,
+    staleTime: 60_000,
   });
 
   const createMutation = useMutation({
@@ -108,11 +112,7 @@ export function TasksScreen() {
         queryKey,
         previous.map((item) =>
           item.id === id
-            ? {
-                ...item,
-                completed,
-                completedAt: completed ? new Date().toISOString() : null,
-              }
+            ? { ...item, completed, completedAt: completed ? new Date().toISOString() : null }
             : item
         )
       );
@@ -129,10 +129,7 @@ export function TasksScreen() {
     onMutate: async (taskId) => {
       await queryClient.cancelQueries({ queryKey });
       const previous = queryClient.getQueryData<TaskItem[]>(queryKey) ?? [];
-      queryClient.setQueryData<TaskItem[]>(
-        queryKey,
-        previous.filter((item) => item.id !== taskId)
-      );
+      queryClient.setQueryData<TaskItem[]>(queryKey, previous.filter((item) => item.id !== taskId));
       return { previous };
     },
     onError: (_error, _taskId, context) => {
@@ -141,49 +138,62 @@ export function TasksScreen() {
     onSettled: () => queryClient.invalidateQueries({ queryKey }),
   });
 
+  const createBoardMutation = useMutation({
+    mutationFn: ({ name }: { name: string }) => createBoard(name),
+    onSuccess: () => {
+      setNewBoardName("");
+      void queryClient.invalidateQueries({ queryKey: ["tasks", "boards"] });
+    },
+  });
+
+  const createColumnMutation = useMutation({
+    mutationFn: ({ boardId, name }: { boardId: string; name: string }) => createColumn(boardId, name),
+    onSuccess: () => {
+      setNewColumnName("");
+      void queryClient.invalidateQueries({ queryKey: ["tasks", "boards"] });
+    },
+  });
+
   const tasks = tasksQuery.data ?? [];
-  const totalCount = tasks.length;
-  const boardOptions = useMemo(() => {
-    const source = taskMetaQuery.data ?? [];
-    const map = new Map<string, { id: string; name: string }>();
-    source.forEach((task) => {
-      if (!map.has(task.boardId)) map.set(task.boardId, { id: task.boardId, name: task.boardName });
-    });
-    return Array.from(map.values());
-  }, [taskMetaQuery.data]);
-  const columnOptions = useMemo(() => {
-    const source = taskMetaQuery.data ?? [];
-    const map = new Map<string, { id: string; name: string; boardId: string }>();
-    source.forEach((task) => {
-      if (!map.has(task.columnId)) {
-        map.set(task.columnId, { id: task.columnId, name: task.columnName, boardId: task.boardId });
-      }
-    });
-    return Array.from(map.values());
-  }, [taskMetaQuery.data]);
-  const filteredColumns = selectedBoardId
-    ? columnOptions.filter((column) => column.boardId === selectedBoardId)
-    : columnOptions;
+  const boards = boardsQuery.data ?? [];
+  const boardOptions = boards.map((b) => ({ id: b.id, name: b.name }));
+  const filteredColumns = useMemo(() => {
+    if (!selectedBoardId) return boards.flatMap((b) => b.columns.map((c) => ({ ...c, boardId: b.id })));
+    return (boards.find((b) => b.id === selectedBoardId)?.columns ?? []).map((c) => ({ ...c, boardId: selectedBoardId }));
+  }, [boards, selectedBoardId]);
+
+  const filteredTasks = useMemo(
+    () => (filterBoardId ? tasks.filter((t) => t.boardId === filterBoardId) : tasks),
+    [tasks, filterBoardId]
+  );
+  const totalCount = filteredTasks.length;
 
   useEffect(() => {
     if (!sheetOpen) return;
-    if (!selectedBoardId && boardOptions.length > 0) {
-      setSelectedBoardId(boardOptions[0].id);
+    if (!selectedBoardId && boards.length > 0) {
+      setSelectedBoardId(boards[0].id);
     }
-  }, [sheetOpen, selectedBoardId, boardOptions]);
+  }, [sheetOpen, selectedBoardId, boards]);
 
   useEffect(() => {
     if (!sheetOpen) return;
     if (selectedBoardId) {
-      const next = columnOptions.find((column) => column.boardId === selectedBoardId);
-      if (next && next.id !== selectedColumnId) setSelectedColumnId(next.id);
-      if (!next) setSelectedColumnId("");
+      const board = boards.find((b) => b.id === selectedBoardId);
+      const firstCol = board?.columns[0];
+      if (firstCol && firstCol.id !== selectedColumnId) setSelectedColumnId(firstCol.id);
+      if (!firstCol) setSelectedColumnId("");
       return;
     }
-    if (!selectedColumnId && columnOptions.length > 0) {
-      setSelectedColumnId(columnOptions[0].id);
+    if (!selectedColumnId && filteredColumns.length > 0) {
+      setSelectedColumnId(filteredColumns[0].id);
     }
-  }, [sheetOpen, selectedBoardId, selectedColumnId, columnOptions]);
+  }, [sheetOpen, selectedBoardId, selectedColumnId, boards, filteredColumns]);
+
+  useEffect(() => {
+    if (manageOpen && !newColumnBoardId && boards.length > 0) {
+      setNewColumnBoardId(boards[0].id);
+    }
+  }, [manageOpen, newColumnBoardId, boards]);
 
   return (
     <Screen>
@@ -192,6 +202,13 @@ export function TasksScreen() {
           <h1 className="text-xl font-bold tracking-tight">{i18n.tasks.managerTitle}</h1>
           <p className="mt-1 text-xs text-muted">{i18n.tasks.managerSubtitle}</p>
         </div>
+        <button
+          onClick={() => setSheetOpen(true)}
+          className="flex h-10 w-10 items-center justify-center rounded-2xl bg-rose-100 text-rose-500 transition-transform active:scale-95"
+          aria-label={i18n.tasks.newTask}
+        >
+          <Icon name="plus" size={20} />
+        </button>
       </header>
 
       <div className="mt-5 -mx-5 flex gap-2 overflow-x-auto px-5 scrollbar-hide">
@@ -213,6 +230,39 @@ export function TasksScreen() {
         })}
       </div>
 
+      <div className="mt-3 -mx-5 flex items-center gap-2 overflow-x-auto px-5 scrollbar-hide">
+        <button
+          onClick={() => setFilterBoardId(null)}
+          className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
+            filterBoardId === null
+              ? "bg-violet-500 text-white"
+              : "bg-white text-ink/60 shadow-cozy"
+          }`}
+        >
+          {i18n.tasks.allBoards}
+        </button>
+        {boards.map((b) => (
+          <button
+            key={b.id}
+            onClick={() => setFilterBoardId(filterBoardId === b.id ? null : b.id)}
+            className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold transition-all ${
+              filterBoardId === b.id
+                ? "bg-violet-500 text-white"
+                : "bg-white text-ink/60 shadow-cozy"
+            }`}
+          >
+            {b.emoji ?? "📋"} {b.name}
+          </button>
+        ))}
+        <button
+          onClick={() => setManageOpen(true)}
+          className="ml-1 flex shrink-0 h-7 w-7 items-center justify-center rounded-full bg-white text-ink/40 shadow-cozy active:scale-95"
+          aria-label={i18n.tasks.manageBoardsAria}
+        >
+          <Icon name="settings" size={13} />
+        </button>
+      </div>
+
       <div className="mt-4 flex items-baseline justify-between">
         <h2 className="text-lg font-bold tracking-tight">{i18n.tasks.scheduleTitle}</h2>
         <span className="text-xs text-muted">{i18n.tasks.tasksCount(totalCount)}</span>
@@ -227,7 +277,7 @@ export function TasksScreen() {
             title={i18n.tasks.loadErrorTitle}
             subtitle={i18n.tasks.loadErrorSubtitle}
           />
-        ) : tasks.length === 0 ? (
+        ) : filteredTasks.length === 0 ? (
           <EmptyState
             emoji="🌷"
             title={i18n.tasks.emptyTitle}
@@ -235,7 +285,7 @@ export function TasksScreen() {
           />
         ) : (
           <AnimatePresence initial={false}>
-            {tasks.map((task, index) => (
+            {filteredTasks.map((task, index) => (
               <TaskCard
                 key={task.id}
                 task={task}
@@ -282,14 +332,14 @@ export function TasksScreen() {
                 <TextField
                   value={description}
                   onChange={setDescription}
-                  placeholder="Опис (необов'язково)"
+                  placeholder={i18n.tasks.descriptionPlaceholder}
                   multiline
                 />
               </div>
               <div className="mt-3 grid grid-cols-2 gap-3">
                 <label className="space-y-1">
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                    Дошка
+                    {i18n.tasks.boardLabel}
                   </span>
                   <select
                     value={selectedBoardId}
@@ -300,7 +350,7 @@ export function TasksScreen() {
                     disabled={boardOptions.length === 0}
                     className="h-12 w-full rounded-2xl border border-border bg-cream-50 px-3 text-sm text-text outline-none focus:border-rose-300 focus:bg-white focus:ring-4 focus:ring-rose-100 disabled:opacity-60"
                   >
-                    {boardOptions.length === 0 ? <option value="">Немає дошок</option> : null}
+                    {boardOptions.length === 0 ? <option value="">{i18n.tasks.noBoardsOption}</option> : null}
                     {boardOptions.map((board) => (
                       <option key={board.id} value={board.id}>
                         {board.name}
@@ -310,7 +360,7 @@ export function TasksScreen() {
                 </label>
                 <label className="space-y-1">
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                    Категорія
+                    {i18n.tasks.columnLabel}
                   </span>
                   <select
                     value={selectedColumnId}
@@ -318,7 +368,7 @@ export function TasksScreen() {
                     disabled={filteredColumns.length === 0}
                     className="h-12 w-full rounded-2xl border border-border bg-cream-50 px-3 text-sm text-text outline-none focus:border-rose-300 focus:bg-white focus:ring-4 focus:ring-rose-100 disabled:opacity-60"
                   >
-                    {filteredColumns.length === 0 ? <option value="">Немає категорій</option> : null}
+                    {filteredColumns.length === 0 ? <option value="">{i18n.tasks.noColumnsOption}</option> : null}
                     {filteredColumns.map((column) => (
                       <option key={column.id} value={column.id}>
                         {column.name}
@@ -330,7 +380,7 @@ export function TasksScreen() {
               <div className="mt-3 grid grid-cols-2 gap-3">
                 <label className="space-y-1">
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                    Пріоритет
+                    {i18n.tasks.priorityLabel}
                   </span>
                   <select
                     value={priority}
@@ -339,15 +389,15 @@ export function TasksScreen() {
                     }
                     className="h-12 w-full rounded-2xl border border-border bg-cream-50 px-3 text-sm text-text outline-none focus:border-rose-300 focus:bg-white focus:ring-4 focus:ring-rose-100"
                   >
-                    <option value="LOW">Low</option>
-                    <option value="MEDIUM">Medium</option>
-                    <option value="HIGH">High</option>
-                    <option value="URGENT">Urgent</option>
+                    <option value="LOW">{i18n.tasks.priorityLow}</option>
+                    <option value="MEDIUM">{i18n.tasks.priorityMedium}</option>
+                    <option value="HIGH">{i18n.tasks.priorityHigh}</option>
+                    <option value="URGENT">{i18n.tasks.priorityUrgent}</option>
                   </select>
                 </label>
                 <label className="space-y-1">
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-                    Дедлайн
+                    {i18n.tasks.deadlineLabel}
                   </span>
                   <input
                     type="datetime-local"
@@ -364,7 +414,7 @@ export function TasksScreen() {
                   onChange={(event) => setIsPrivate(event.target.checked)}
                   className="h-4 w-4 accent-rose-500"
                 />
-                Приватна задача
+                {i18n.tasks.privateTask}
               </label>
               <div className="mt-5 flex gap-3">
                 <Button variant="ghost" fullWidth onClick={() => setSheetOpen(false)}>
@@ -380,6 +430,7 @@ export function TasksScreen() {
                       priority,
                       dueDate: dueDate ? new Date(dueDate).toISOString() : null,
                       isPrivate,
+                      columnId: selectedColumnId || null,
                     })
                   }
                   disabled={createMutation.isPending || title.trim().length === 0}
@@ -390,15 +441,118 @@ export function TasksScreen() {
             </motion.div>
           </motion.div>
         ) : null}
+
+        {manageOpen ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm"
+            onClick={(e) => e.target === e.currentTarget && setManageOpen(false)}
+          >
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 28, stiffness: 300 }}
+              className="w-full max-w-md overflow-y-auto rounded-t-[32px] bg-white px-5 pb-10 pt-5 shadow-pop"
+              style={{ maxHeight: "85vh" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-base font-bold text-ink">{i18n.tasks.boardsManageTitle}</h2>
+                <button
+                  onClick={() => setManageOpen(false)}
+                  className="flex h-9 w-9 items-center justify-center rounded-xl bg-cream-100 text-ink/60"
+                >
+                  <Icon name="x" size={16} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="rounded-2xl bg-cream-50 p-4">
+                  <p className="mb-2 text-xs font-semibold text-ink/60 uppercase tracking-wide">{i18n.tasks.newBoardSection}</p>
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <TextField
+                        value={newBoardName}
+                        onChange={setNewBoardName}
+                        placeholder={i18n.tasks.newBoardPlaceholder}
+                      />
+                    </div>
+                    <Button
+                      variant="primary"
+                      onClick={() => newBoardName.trim() && createBoardMutation.mutate({ name: newBoardName.trim() })}
+                      disabled={createBoardMutation.isPending || !newBoardName.trim()}
+                      className="h-12 px-4 rounded-xl"
+                    >
+                      <Icon name="plus" size={16} />
+                    </Button>
+                  </div>
+                </div>
+
+                {boards.length > 0 ? (
+                  <div className="rounded-2xl bg-cream-50 p-4">
+                    <p className="mb-2 text-xs font-semibold text-ink/60 uppercase tracking-wide">{i18n.tasks.newColumnSection}</p>
+                    <div className="mb-2">
+                      <select
+                        value={newColumnBoardId}
+                        onChange={(e) => setNewColumnBoardId(e.target.value)}
+                        className="h-11 w-full rounded-xl border border-border bg-white px-3 text-sm text-text outline-none focus:border-violet-300 focus:ring-4 focus:ring-violet-100"
+                      >
+                        {boards.map((b) => (
+                          <option key={b.id} value={b.id}>{b.emoji ?? "📋"} {b.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <TextField
+                          value={newColumnName}
+                          onChange={setNewColumnName}
+                          placeholder={i18n.tasks.newColumnPlaceholder}
+                        />
+                      </div>
+                      <Button
+                        variant="primary"
+                        onClick={() =>
+                          newColumnName.trim() && newColumnBoardId &&
+                          createColumnMutation.mutate({ boardId: newColumnBoardId, name: newColumnName.trim() })
+                        }
+                        disabled={createColumnMutation.isPending || !newColumnName.trim() || !newColumnBoardId}
+                        className="h-12 px-4 rounded-xl"
+                      >
+                        <Icon name="plus" size={16} />
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {boards.map((board) => (
+                  <div key={board.id} className="rounded-2xl border border-border bg-white p-4">
+                    <p className="text-sm font-semibold text-ink">{board.emoji ?? "📋"} {board.name}</p>
+                    {board.columns.length > 0 ? (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {board.columns.map((col) => (
+                          <span
+                            key={col.id}
+                            className="rounded-full bg-cream-100 px-2.5 py-1 text-xs font-medium text-ink/70"
+                          >
+                            {col.name}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-1 text-xs text-muted">{i18n.tasks.noCategoriesInBoard}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        ) : null}
       </AnimatePresence>
-      <button
-        type="button"
-        onClick={() => setSheetOpen(true)}
-        className="fixed bottom-24 right-6 z-40 flex h-12 w-12 items-center justify-center rounded-2xl bg-ink text-white shadow-pop transition-transform active:scale-95"
-        aria-label={i18n.tasks.newTask}
-      >
-        <Icon name="plus" size={20} />
-      </button>
+
     </Screen>
   );
 }

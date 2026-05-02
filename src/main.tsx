@@ -3,12 +3,13 @@ import { RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
-import { requestPushPermissions } from "./lib/push-permissions";
+import { requestPushPermissions, setupPushRegistrationListener } from "./lib/push-permissions";
 import { router } from "./router";
 import { bootstrapSession } from "./stores/session-store";
 
 const queryClient = new QueryClient();
 await bootstrapSession();
+setupPushRegistrationListener();
 void requestPushPermissions();
 
 createRoot(document.getElementById("root")!).render(

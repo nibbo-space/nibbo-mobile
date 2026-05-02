@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { apiRequest } from "./client";
-import { taskListSchema, taskSchema, type TaskItem } from "./contracts";
+import { taskBoardSchema, taskBoardsResponseSchema, taskColumnSchema, taskListSchema, taskSchema, type TaskBoard, type TaskColumn, type TaskItem } from "./contracts";
 
 export type TaskScope = "all" | "mine" | "today" | "overdue";
 
@@ -43,6 +43,31 @@ export async function updateTask(taskId: string, patch: Partial<TaskItem>) {
   });
   if (!response.ok) throw new Error("Failed to update task");
   return taskSchema.parse(await response.json());
+}
+
+export async function fetchBoards(): Promise<TaskBoard[]> {
+  const response = await apiRequest("/api/mobile/v1/tasks/boards");
+  if (!response.ok) throw new Error("Failed to load boards");
+  const data = taskBoardsResponseSchema.parse(await response.json());
+  return data.boards;
+}
+
+export async function createBoard(name: string, emoji?: string): Promise<TaskBoard> {
+  const response = await apiRequest("/api/mobile/v1/tasks/boards", {
+    method: "POST",
+    body: { name, emoji: emoji ?? "📋" },
+  });
+  if (!response.ok) throw new Error("Failed to create board");
+  return taskBoardSchema.parse(await response.json());
+}
+
+export async function createColumn(boardId: string, name: string, emoji?: string): Promise<TaskColumn> {
+  const response = await apiRequest(`/api/mobile/v1/tasks/boards/${boardId}/columns`, {
+    method: "POST",
+    body: { name, emoji: emoji ?? "📋" },
+  });
+  if (!response.ok) throw new Error("Failed to create column");
+  return taskColumnSchema.parse(await response.json());
 }
 
 export async function removeTask(taskId: string) {

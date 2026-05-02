@@ -1,21 +1,22 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { Icon } from "./icon";
+import { i18n } from "../lib/i18n";
 
 type Props = {
   open: boolean;
   onClose: () => void;
 };
 
-const placeholders = [
-  {
-    emoji: "🌱",
-    title: "Ласкаво просимо до Nibbo",
-    body: "Це місце для сповіщень про задачі, нагадування та новини сім'ї.",
-    when: "щойно",
-  },
-];
-
 export function NotificationsSheet({ open, onClose }: Props) {
+  const placeholders = [
+    {
+      emoji: "🌱",
+      title: i18n.notifications.sheetWelcomeTitle,
+      body: i18n.notifications.sheetWelcomeBody,
+      when: i18n.notifications.sheetJustNow,
+    },
+  ];
+
   return (
     <AnimatePresence>
       {open ? (
@@ -38,13 +39,13 @@ export function NotificationsSheet({ open, onClose }: Props) {
 
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-bold tracking-tight text-ink">Сповіщення</h2>
-                <p className="mt-0.5 text-xs text-muted">Те, що варте уваги</p>
+                <h2 className="text-xl font-bold tracking-tight text-ink">{i18n.notifications.title}</h2>
+                <p className="mt-0.5 text-xs text-muted">{i18n.notifications.subtitle}</p>
               </div>
               <button
                 onClick={onClose}
                 className="flex h-10 w-10 items-center justify-center rounded-2xl bg-cream-50 text-text/70"
-                aria-label="Закрити"
+                aria-label={i18n.notifications.closeAria}
               >
                 <Icon name="back" size={16} className="rotate-90" />
               </button>
